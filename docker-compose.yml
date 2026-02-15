@@ -1,6 +1,6 @@
-# Deploy via Coolify: New Resource → Docker Compose
+# Deploy via Coolify: New Resource -> Docker Compose
 #
-# WORKSPACE_PATH: host directory for all projects (cloned repos live here)
+# WORKSPACE_PATH: host directory for all projects
 # GITHUB_USER: default GitHub username for clone() shorthand
 
 services:
@@ -9,7 +9,7 @@ services:
     ports:
       - "8008:8008"
     volumes:
-      - ${WORKSPACE_PATH:-/home/oleg/workspace}:/workspace:rw
+      - ${WORKSPACE_PATH:-/opt/mcp-workspace}:/workspace:rw
     environment:
       - WORKSPACE=/workspace
       - GITHUB_USER=${GITHUB_USER:-OlegKarenkikh}
