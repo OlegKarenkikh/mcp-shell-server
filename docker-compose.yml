@@ -1,21 +1,25 @@
 # Deploy via Coolify: New Resource -> Docker Compose
 #
-# WORKSPACE_PATH: host directory for all projects
-# GITHUB_USER: default GitHub username for clone() shorthand
+# Coolify auto-generates SSL via Let's Encrypt for SERVICE_FQDN_MCP
+# Basic Auth protects the endpoint via Traefik middleware
 
 services:
   mcp-shell:
     build: .
-    ports:
-      - "8008:8008"
-    volumes:
-      - ${WORKSPACE_PATH:-/opt/mcp-workspace}:/workspace:rw
     environment:
+      # Coolify magic: auto-assigns domain + SSL
+      - SERVICE_FQDN_MCP_8008=https://mcp.olegk.su
       - WORKSPACE=/workspace
       - GITHUB_USER=${GITHUB_USER:-OlegKarenkikh}
       - CMD_TIMEOUT=120
       - MAX_OUTPUT=4000
       - MAX_FILE_READ=8000
+    volumes:
+      - ${WORKSPACE_PATH:-/opt/mcp-workspace}:/workspace:rw
+    labels:
+      # Basic Auth via Traefik
+      - "traefik.http.middlewares.mcp-auth.basicauth.users=${AUTH_CREDENTIALS}"
+      - "traefik.http.routers.mcp-shell-https.middlewares=mcp-auth"
     restart: unless-stopped
     deploy:
       resources:

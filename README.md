@@ -3,7 +3,6 @@
 MCP-сервер с shell-доступом для интеграции с [Perplexity AI](https://perplexity.ai).
 
 Мульти-проектный workspace: клонируй любые репозитории, переключайся между ними, запускай тесты и редактируй файлы.
-Использует [supergateway](https://github.com/supercorp-ai/supergateway) для трансляции stdio → SSE (HTTP).
 
 **Endpoint:** `https://mcp.olegk.su/sse`
 
@@ -19,80 +18,77 @@ MCP-сервер с shell-доступом для интеграции с [Perpl
 | `write(path, content)` | Записать файл |
 | `ls(path?)` | Показать содержимое директории |
 
-## Рабочий процесс
-
-```
-# Клонировать проект (короткая форма — берёт из GITHUB_USER)
-clone("Purchase")
-clone("chatvlmllm", branch="develop")
-
-# Посмотреть все проекты
-projects()
-#   Purchase  [main] ← active
-#   chatvlmllm  [develop]
-
-# Переключиться
-switch("chatvlmllm")
-
-# Запустить тесты
-run("pytest tests/ -v --tb=short")
-
-# Редактировать / читать
-cat("src/main.py")
-write("src/main.py", "...")
-```
-
 ## Deploy via Coolify
 
 ### 1. Создать ресурс
 
-1. Coolify → **New Resource** → **Docker Compose**
-2. Указать этот репозиторий или вставить `docker-compose.yml`
-3. В **Environment Variables** задать:
-   ```
-   WORKSPACE_PATH=/home/oleg/workspace
-   GITHUB_USER=OlegKarenkikh
-   ```
+1. Coolify → **New Resource** → **Public Repository**
+2. URL: `https://github.com/OlegKarenkikh/mcp-shell-server`
+3. Branch: `main`, Build Pack: **Docker Compose**
+4. Docker Compose Location: `/docker-compose.yml`
+5. **Load Compose File** → **Save**
 
-### 2. Настроить домен
+### 2. Environment Variables
 
-В настройках сервиса указать домен:
+Сгенерировать пароль на сервере:
+```bash
+apt-get install -y apache2-utils
+htpasswd -nbB oleg YourStrongPassword
 ```
-mcp.olegk.su
+
+Вывод будет например: `oleg:$2y$05$abc123...`
+
+В Coolify → **Environment Variables** добавить:
+```
+WORKSPACE_PATH=/opt/mcp-workspace
+GITHUB_USER=OlegKarenkikh
+AUTH_CREDENTIALS=oleg:$$2y$$05$$abc123...
 ```
 
-Coolify автоматически настроит HTTPS + SSL.
+> **Важно:** каждый `$` в хеше нужно удвоить `$$` для docker-compose!
+
+### 3. Deploy
+
+Coolify автоматически:
+- Назначит домен `mcp.olegk.su` через `SERVICE_FQDN_MCP_8008`
+- Выпустит Let's Encrypt SSL
+- Настроит Traefik proxy (443 → 8008)
+- Включит Basic Auth
 
 Endpoint: `https://mcp.olegk.su/sse`
 
-### 3. Подключить к Perplexity
-
-Settings → Connectors → Remote MCP → `https://mcp.olegk.su/sse`
-
-## Подготовка хоста
-
-Перед первым деплоем создай директорию на сервере:
+### 4. Проверка
 
 ```bash
-mkdir -p /home/oleg/workspace
+# Без авторизации — должен вернуть 401
+curl https://mcp.olegk.su/sse
+
+# С авторизацией — должен вернуть event: endpoint
+curl -N -u oleg:YourStrongPassword https://mcp.olegk.su/sse
 ```
 
-Проекты будут клонироваться сюда через tool `clone()`.
+### 5. Подключить к Perplexity
+
+Settings → Connectors → Remote MCP:
+- URL: `https://mcp.olegk.su/sse`
+- Auth: Basic Auth → `oleg` / `YourStrongPassword`
 
 ## Безопасность
 
-- Все пути ограничены `WORKSPACE` (path traversal protection)
-- Таймаут команд: `CMD_TIMEOUT` (по умолчанию 120с)
-- Вывод обрезается до `MAX_OUTPUT` символов
+- HTTPS + Let's Encrypt SSL (авто через Coolify)
+- Basic Auth через Traefik middleware
+- Все пути ограничены WORKSPACE
+- Таймаут команд: 120с
 - Ресурсы: 512MB RAM, 1 CPU
-- Рекомендуется закрыть доступ через Basic Auth или Cloudflare Tunnel
+- Нет открытых портов (всё через Traefik proxy)
 
 ## Переменные окружения
 
-| Переменная | По умолчанию | Описание |
-|---|---|---|
-| `WORKSPACE_PATH` | `/home/oleg/workspace` | Путь на хосте для монтирования |
-| `GITHUB_USER` | `OlegKarenkikh` | GitHub-пользователь для короткой формы clone() |
-| `CMD_TIMEOUT` | `120` | Таймаут команд (сек) |
-| `MAX_OUTPUT` | `4000` | Макс. длина вывода |
-| `MAX_FILE_READ` | `8000` | Макс. длина файла |
+| Переменная | Описание |
+|---|---|
+| `WORKSPACE_PATH` | Путь на хосте для проектов |
+| `GITHUB_USER` | GitHub-пользователь для clone() |
+| `AUTH_CREDENTIALS` | `user:$$hash` для Basic Auth |
+| `CMD_TIMEOUT` | Таймаут команд (сек) |
+| `MAX_OUTPUT` | Макс. длина вывода |
+| `MAX_FILE_READ` | Макс. длина файла |
