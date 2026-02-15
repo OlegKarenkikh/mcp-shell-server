@@ -1,20 +1,21 @@
 # Deploy via Coolify: New Resource -> Docker Compose
+# Domain + SSL: configure in Coolify UI after deploy
+# Auth: set AUTH_TOKEN env var in Coolify
 
 services:
   mcp-shell:
     build: .
+    ports:
+      - "8008:8008"
     environment:
-      - SERVICE_FQDN_MCP_8008=https://mcp.olegk.su
       - WORKSPACE=/workspace
       - GITHUB_USER=${GITHUB_USER:-OlegKarenkikh}
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
       - CMD_TIMEOUT=120
       - MAX_OUTPUT=4000
       - MAX_FILE_READ=8000
     volumes:
       - ${WORKSPACE_PATH:-/opt/mcp-workspace}:/workspace:rw
-    labels:
-      - "traefik.http.middlewares.mcp-auth.basicauth.users=${AUTH_CREDENTIALS}"
-      - "traefik.http.routers.mcp-shell-https.middlewares=mcp-auth"
     restart: unless-stopped
     deploy:
       resources:
@@ -22,7 +23,7 @@ services:
           memory: 512M
           cpus: '1.0'
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8008/sse", "-o", "/dev/null", "--max-time", "2"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8008/healthz", "-o", "/dev/null", "--max-time", "2"]
       interval: 30s
       timeout: 10s
       retries: 3

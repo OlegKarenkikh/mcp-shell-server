@@ -1,25 +1,54 @@
 #!/usr/bin/env python3
 """MCP Shell Server for Perplexity AI integration.
 
-Multi-project workspace: clone, switch, run, cat, write, ls.
+Multi-project workspace with built-in Bearer token auth.
 Runs as native SSE server via FastMCP.
 """
 
 import os
 import subprocess
+import logging
 
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, PlainTextResponse
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger("mcp-shell")
 
 WORKSPACE = os.environ.get("WORKSPACE", "/workspace")
 TIMEOUT = int(os.environ.get("CMD_TIMEOUT", "120"))
 MAX_OUTPUT = int(os.environ.get("MAX_OUTPUT", "4000"))
 MAX_FILE_READ = int(os.environ.get("MAX_FILE_READ", "8000"))
 GITHUB_USER = os.environ.get("GITHUB_USER", "OlegKarenkikh")
+AUTH_TOKEN = os.environ.get("AUTH_TOKEN", "")
 
 STATE_FILE = os.path.join(WORKSPACE, ".mcp_active_project")
 
 mcp = FastMCP("shell-runner", host="0.0.0.0", port=8008)
 
+
+# ── Auth middleware ──
+
+class TokenAuthMiddleware(BaseHTTPMiddleware):
+    """Bearer token authentication middleware."""
+    async def dispatch(self, request: Request, call_next):
+        # Skip auth for health check
+        if request.url.path == "/healthz":
+            return await call_next(request)
+        # Skip auth if no token configured
+        if not AUTH_TOKEN:
+            return await call_next(request)
+        # Check Bearer token
+        auth = request.headers.get("authorization", "")
+        if auth == f"Bearer {AUTH_TOKEN}":
+            return await call_next(request)
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+
+# ── Helper functions ──
 
 def _get_active_project() -> str:
     if os.path.exists(STATE_FILE):
@@ -48,6 +77,8 @@ def _safe_path(path: str, base: str | None = None) -> str | None:
         return None
     return real
 
+
+# ── Tools ──
 
 @mcp.tool()
 def clone(repo: str, branch: str = "") -> str:
@@ -231,5 +262,39 @@ def ls(path: str = ".") -> str:
         return f"ERROR: {e}"
 
 
+# ── App with middleware ──
+
+def create_app():
+    """Create Starlette app with auth middleware wrapping MCP SSE."""
+    from mcp.server.sse import SseServerTransport
+    import uvicorn
+
+    sse = SseServerTransport("/message")
+
+    async def handle_sse(request: Request):
+        async with sse.connect_sse(
+            request.scope, request.receive, request._send
+        ) as streams:
+            await mcp._mcp_server.run(
+                streams[0], streams[1], mcp._mcp_server.create_initialization_options()
+            )
+
+    async def handle_healthz(request: Request):
+        return PlainTextResponse("ok")
+
+    from starlette.routing import Route
+    app = Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_sse),
+            Route("/message", endpoint=sse.handle_post_message, methods=["POST"]),
+            Route("/healthz", endpoint=handle_healthz),
+        ],
+        middleware=[Middleware(TokenAuthMiddleware)],
+    )
+    return app
+
+
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    import uvicorn
+    app = create_app()
+    uvicorn.run(app, host="0.0.0.0", port=8008)

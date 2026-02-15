@@ -5,8 +5,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends git curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python MCP SDK
-RUN pip install --no-cache-dir "mcp[cli]"
+# Install Python MCP SDK + starlette + uvicorn
+RUN pip install --no-cache-dir "mcp[cli]" starlette uvicorn
 
 WORKDIR /workspace
 COPY shell_mcp_server.py /opt/mcp/
