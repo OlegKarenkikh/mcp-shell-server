@@ -7,7 +7,6 @@ services:
   mcp-shell:
     build: .
     environment:
-      # Coolify magic: auto-assigns domain + SSL
       - SERVICE_FQDN_MCP_8008=https://mcp.olegk.su
       - WORKSPACE=/workspace
       - GITHUB_USER=${GITHUB_USER:-OlegKarenkikh}
@@ -17,7 +16,6 @@ services:
     volumes:
       - ${WORKSPACE_PATH:-/opt/mcp-workspace}:/workspace:rw
     labels:
-      # Basic Auth via Traefik
       - "traefik.http.middlewares.mcp-auth.basicauth.users=${AUTH_CREDENTIALS}"
       - "traefik.http.routers.mcp-shell-https.middlewares=mcp-auth"
     restart: unless-stopped
@@ -27,7 +25,7 @@ services:
           memory: 512M
           cpus: '1.0'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:8008/sse').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8008/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

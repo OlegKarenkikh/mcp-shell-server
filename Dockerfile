@@ -19,4 +19,5 @@ EXPOSE 8008
 
 CMD ["supergateway", \
      "--stdio", "python3 /opt/mcp/shell_mcp_server.py", \
-     "--port", "8008"]
+     "--port", "8008", \
+     "--healthEndpoint", "/healthz"]
