@@ -2,7 +2,7 @@
 """MCP Shell Server for Perplexity AI integration.
 
 Multi-project workspace: clone, switch, run, cat, write, ls.
-Runs as native SSE server via FastMCP — no supergateway needed.
+Runs as native SSE server via FastMCP.
 """
 
 import os
@@ -18,7 +18,7 @@ GITHUB_USER = os.environ.get("GITHUB_USER", "OlegKarenkikh")
 
 STATE_FILE = os.path.join(WORKSPACE, ".mcp_active_project")
 
-mcp = FastMCP("shell-runner")
+mcp = FastMCP("shell-runner", host="0.0.0.0", port=8008)
 
 
 def _get_active_project() -> str:
@@ -103,11 +103,11 @@ def projects() -> str:
             git_info = ""
             if is_git:
                 try:
-                    branch = subprocess.run(
+                    br = subprocess.run(
                         "git branch --show-current",
                         shell=True, cwd=full, capture_output=True, text=True, timeout=5
                     ).stdout.strip()
-                    git_info = f"  [{branch}]"
+                    git_info = f"  [{br}]"
                 except Exception:
                     git_info = "  [git]"
             entries.append(f"  {entry}{git_info}{marker}")
@@ -232,4 +232,4 @@ def ls(path: str = ".") -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8008)
+    mcp.run(transport="sse")
