@@ -2,7 +2,7 @@
 
 MCP-сервер с shell-доступом для интеграции с [Perplexity AI](https://perplexity.ai).
 
-Предоставляет инструменты `run`, `cat`, `write`, `ls` через MCP protocol.
+Мульти-проектный workspace: клонируй любые репозитории, переключайся между ними, запускай тесты и редактируй файлы.
 Использует [supergateway](https://github.com/supercorp-ai/supergateway) для трансляции stdio → SSE (HTTP).
 
 **Endpoint:** `https://mcp.olegk.su/sse`
@@ -11,10 +11,36 @@ MCP-сервер с shell-доступом для интеграции с [Perpl
 
 | Tool | Описание |
 |------|----------|
-| `run(command, cwd?)` | Запустить shell-команду, вернуть stdout+stderr |
+| `clone(repo, branch?)` | Клонировать репо из GitHub (имя или URL) |
+| `projects()` | Показать все проекты и активный |
+| `switch(project)` | Переключить активный проект |
+| `run(command, cwd?)` | Запустить shell-команду в активном проекте |
 | `cat(path)` | Прочитать файл |
 | `write(path, content)` | Записать файл |
 | `ls(path?)` | Показать содержимое директории |
+
+## Рабочий процесс
+
+```
+# Клонировать проект (короткая форма — берёт из GITHUB_USER)
+clone("Purchase")
+clone("chatvlmllm", branch="develop")
+
+# Посмотреть все проекты
+projects()
+#   Purchase  [main] ← active
+#   chatvlmllm  [develop]
+
+# Переключиться
+switch("chatvlmllm")
+
+# Запустить тесты
+run("pytest tests/ -v --tb=short")
+
+# Редактировать / читать
+cat("src/main.py")
+write("src/main.py", "...")
+```
 
 ## Deploy via Coolify
 
@@ -24,70 +50,49 @@ MCP-сервер с shell-доступом для интеграции с [Perpl
 2. Указать этот репозиторий или вставить `docker-compose.yml`
 3. В **Environment Variables** задать:
    ```
-   PROJECT_PATH=/home/oleg/Purchase
+   WORKSPACE_PATH=/home/oleg/workspace
+   GITHUB_USER=OlegKarenkikh
    ```
 
 ### 2. Настроить домен
-
-Coolify автоматически настроит reverse proxy + Let's Encrypt SSL.
 
 В настройках сервиса указать домен:
 ```
 mcp.olegk.su
 ```
 
-Endpoint после деплоя:
-```
-https://mcp.olegk.su/sse
-```
+Coolify автоматически настроит HTTPS + SSL.
 
-### 3. Защита доступа
+Endpoint: `https://mcp.olegk.su/sse`
 
-**Вариант A: Traefik Basic Auth** (через Coolify labels):
-```yaml
-labels:
-  - "traefik.http.middlewares.mcp-auth.basicauth.users=user:$$apr1$$..."
-  - "traefik.http.routers.mcp.middlewares=mcp-auth"
-```
+### 3. Подключить к Perplexity
 
-Сгенерировать пароль:
-```bash
-htpasswd -nb user password
-```
+Settings → Connectors → Remote MCP → `https://mcp.olegk.su/sse`
 
-**Вариант B: Cloudflare Tunnel** — Zero Trust без открытых портов.
+## Подготовка хоста
 
-### 4. Подключить к Perplexity
-
-- **Mac app**: Settings → Connectors → Remote MCP → URL: `https://mcp.olegk.su/sse`
-- **Web** (когда Remote MCP станет доступен): аналогично
-
-## Локальный запуск
+Перед первым деплоем создай директорию на сервере:
 
 ```bash
-# Без Docker
-pip install "mcp[cli]"
-python3 shell_mcp_server.py
-
-# С Docker
-cp .env.example .env
-# отредактировать .env
-docker compose up -d
+mkdir -p /home/oleg/workspace
 ```
+
+Проекты будут клонироваться сюда через tool `clone()`.
 
 ## Безопасность
 
-- Все пути ограничены `PROJECT_DIR` (path traversal protection)
+- Все пути ограничены `WORKSPACE` (path traversal protection)
 - Таймаут команд: `CMD_TIMEOUT` (по умолчанию 120с)
 - Вывод обрезается до `MAX_OUTPUT` символов
-- Контейнер работает от непривилегированного пользователя `mcp`
-- Ресурсы ограничены: 512MB RAM, 1 CPU
+- Ресурсы: 512MB RAM, 1 CPU
+- Рекомендуется закрыть доступ через Basic Auth или Cloudflare Tunnel
 
 ## Переменные окружения
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
-| `PROJECT_DIR` | `/workspace` | Рабочая директория внутри контейнера |
-| `CMD_TIMEOUT` | `120` | Таймаут выполнения команд (сек) |
-| `MAX_OUTPUT` | `4000` | Макс. длина вывода команды |
-| `MAX_FILE_READ` | `8000` | Макс. длина читаемого файла |
+| `WORKSPACE_PATH` | `/home/oleg/workspace` | Путь на хосте для монтирования |
+| `GITHUB_USER` | `OlegKarenkikh` | GitHub-пользователь для короткой формы clone() |
+| `CMD_TIMEOUT` | `120` | Таймаут команд (сек) |
+| `MAX_OUTPUT` | `4000` | Макс. длина вывода |
+| `MAX_FILE_READ` | `8000` | Макс. длина файла |
