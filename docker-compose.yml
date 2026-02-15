@@ -1,6 +1,5 @@
 # Deploy via Coolify: New Resource -> Docker Compose
-# Domain + SSL: configure in Coolify UI after deploy
-# Auth: set AUTH_TOKEN env var in Coolify
+# SERVICE_FQDN_MCP tells Coolify to create Traefik routes + SSL
 
 services:
   mcp-shell:
@@ -8,6 +7,7 @@ services:
     ports:
       - "8008:8008"
     environment:
+      - SERVICE_FQDN_MCP_8008
       - WORKSPACE=/workspace
       - GITHUB_USER=${GITHUB_USER:-OlegKarenkikh}
       - AUTH_TOKEN=${AUTH_TOKEN:-}
