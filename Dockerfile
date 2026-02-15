@@ -19,9 +19,9 @@ COPY shell_mcp_server.py /opt/mcp/
 # Non-root user for security
 RUN useradd -m mcp && chown -R mcp:mcp /opt/mcp /workspace
 
-EXPOSE 8000
+EXPOSE 8008
 
 # supergateway wraps stdio MCP server into SSE HTTP
 CMD ["node", "/usr/local/lib/node_modules/supergateway/bin/supergateway.js", \
      "--stdio", "python3 /opt/mcp/shell_mcp_server.py", \
-     "--port", "8000"]
+     "--port", "8008"]
