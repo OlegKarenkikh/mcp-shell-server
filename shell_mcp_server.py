@@ -2,16 +2,9 @@
 """MCP Shell Server for Perplexity AI integration.
 
 Multi-project workspace: clone, switch, run, cat, write, ls.
-Designed to run behind supergateway (stdio → SSE transport).
-
-Security:
-- All paths restricted to WORKSPACE
-- Command timeout configurable
-- Output truncated
-- Path traversal protection
+Runs as native SSE server via FastMCP — no supergateway needed.
 """
 
-import json
 import os
 import subprocess
 
@@ -23,20 +16,17 @@ MAX_OUTPUT = int(os.environ.get("MAX_OUTPUT", "4000"))
 MAX_FILE_READ = int(os.environ.get("MAX_FILE_READ", "8000"))
 GITHUB_USER = os.environ.get("GITHUB_USER", "OlegKarenkikh")
 
-# Active project tracking
 STATE_FILE = os.path.join(WORKSPACE, ".mcp_active_project")
 
 mcp = FastMCP("shell-runner")
 
 
 def _get_active_project() -> str:
-    """Get current active project directory."""
     if os.path.exists(STATE_FILE):
         name = open(STATE_FILE).read().strip()
         path = os.path.join(WORKSPACE, name)
         if os.path.isdir(path):
             return path
-    # Fallback: first directory in workspace
     for entry in sorted(os.listdir(WORKSPACE)):
         full = os.path.join(WORKSPACE, entry)
         if os.path.isdir(full) and not entry.startswith("."):
@@ -45,13 +35,11 @@ def _get_active_project() -> str:
 
 
 def _set_active_project(name: str) -> None:
-    """Set active project by name."""
     with open(STATE_FILE, "w") as f:
         f.write(name)
 
 
 def _safe_path(path: str, base: str | None = None) -> str | None:
-    """Resolve and validate path is within WORKSPACE."""
     if base is None:
         base = _get_active_project()
     full = os.path.join(base, path) if not os.path.isabs(path) else path
@@ -68,7 +56,7 @@ def clone(repo: str, branch: str = "") -> str:
     Args:
         repo: Repository name (e.g. 'Purchase') or full URL.
               If just a name, clones from GITHUB_USER account.
-        branch: Branch to checkout (optional, defaults to repo default)
+        branch: Branch to checkout (optional)
     """
     if repo.startswith("http") or repo.startswith("git@"):
         url = repo
@@ -80,7 +68,6 @@ def clone(repo: str, branch: str = "") -> str:
     target = os.path.join(WORKSPACE, name)
 
     if os.path.isdir(target):
-        # Already exists — pull instead
         cmd = f"git -C {target} pull"
         if branch:
             cmd = f"git -C {target} checkout {branch} && git -C {target} pull"
@@ -98,7 +85,7 @@ def clone(repo: str, branch: str = "") -> str:
         if result.returncode != 0:
             return f"ERROR: {result.stderr.strip()}"
         _set_active_project(name)
-        return f"Cloned {url} → {name}. Active project: {name}\n{result.stdout.strip()}"
+        return f"Cloned {url} -> {name}. Active project: {name}\n{result.stdout.strip()}"
     except subprocess.TimeoutExpired:
         return f"ERROR: clone timed out after {TIMEOUT}s"
 
@@ -111,8 +98,7 @@ def projects() -> str:
     for entry in sorted(os.listdir(WORKSPACE)):
         full = os.path.join(WORKSPACE, entry)
         if os.path.isdir(full) and not entry.startswith("."):
-            marker = " ← active" if entry == active else ""
-            # Check if it's a git repo
+            marker = " <- active" if entry == active else ""
             is_git = os.path.isdir(os.path.join(full, ".git"))
             git_info = ""
             if is_git:
@@ -164,12 +150,8 @@ def run(command: str, cwd: str = "") -> str:
 
     try:
         result = subprocess.run(
-            command,
-            shell=True,
-            cwd=work_dir,
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT,
+            command, shell=True, cwd=work_dir,
+            capture_output=True, text=True, timeout=TIMEOUT,
         )
         output = (result.stdout + result.stderr).strip()
         if not output:
@@ -219,7 +201,7 @@ def write(path: str, content: str) -> str:
         os.makedirs(os.path.dirname(resolved), exist_ok=True)
         with open(resolved, "w") as f:
             f.write(content)
-        return f"OK: {len(content)} bytes → {path}"
+        return f"OK: {len(content)} bytes -> {path}"
     except Exception as e:
         return f"ERROR: {e}"
 
@@ -250,4 +232,4 @@ def ls(path: str = ".") -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    mcp.run(transport="sse", host="0.0.0.0", port=8008)
