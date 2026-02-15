@@ -5,6 +5,8 @@ MCP-сервер с shell-доступом для интеграции с [Perpl
 Предоставляет инструменты `run`, `cat`, `write`, `ls` через MCP protocol.
 Использует [supergateway](https://github.com/supercorp-ai/supergateway) для трансляции stdio → SSE (HTTP).
 
+**Endpoint:** `https://mcp.olegk.su/sse`
+
 ## Tools
 
 | Tool | Описание |
@@ -31,12 +33,12 @@ Coolify автоматически настроит reverse proxy + Let's Encryp
 
 В настройках сервиса указать домен:
 ```
-mcp-shell.your-domain.com
+mcp.olegk.su
 ```
 
 Endpoint после деплоя:
 ```
-https://mcp-shell.your-domain.com/sse
+https://mcp.olegk.su/sse
 ```
 
 ### 3. Защита доступа
@@ -57,7 +59,7 @@ htpasswd -nb user password
 
 ### 4. Подключить к Perplexity
 
-- **Mac app**: Settings → Connectors → Remote MCP → URL: `https://mcp-shell.your-domain.com/sse`
+- **Mac app**: Settings → Connectors → Remote MCP → URL: `https://mcp.olegk.su/sse`
 - **Web** (когда Remote MCP станет доступен): аналогично
 
 ## Локальный запуск
